@@ -1417,9 +1417,6 @@ static int goodix_ts_input_dev_config(struct goodix_ts_core *core_data)
 		return -ENOMEM;
 	}
 
-	core_data->input_dev = input_dev;
-	input_set_drvdata(input_dev, core_data);
-
 	sprintf(core_data->input_name, "%s.%d", GOODIX_CORE_DRIVER_NAME,
 		dev_id);
 
@@ -1456,6 +1453,9 @@ static int goodix_ts_input_dev_config(struct goodix_ts_core *core_data)
 		return r;
 	}
 
+	core_data->input_dev = input_dev;
+	input_set_drvdata(input_dev, core_data);
+
 	return 0;
 }
 
@@ -1472,9 +1472,6 @@ static int goodix_ts_pen_dev_config(struct goodix_ts_core *core_data)
 		ts_err(dev, "Failed to allocated pen device");
 		return -ENOMEM;
 	}
-
-	core_data->pen_dev = pen_dev;
-	input_set_drvdata(pen_dev, core_data);
 
 	sprintf(core_data->input_pen_name, "%s.%d,%s", GOODIX_CORE_DRIVER_NAME,
 		dev_id, "pen");
@@ -1515,6 +1512,9 @@ static int goodix_ts_pen_dev_config(struct goodix_ts_core *core_data)
 		input_free_device(pen_dev);
 		return r;
 	}
+
+	core_data->pen_dev = pen_dev;
+	input_set_drvdata(pen_dev, core_data);
 
 	return 0;
 }
@@ -2120,26 +2120,29 @@ static int goodix_ts_remove(struct platform_device *pdev)
 #if (GOODIX_ENABLE_DUMP_DEV)
 	goodix_dump_dev_exit();
 #endif
-	goodix_tools_exit(core_data);
-	goodix_fw_update_uninit(core_data);
 
 	if (core_data->init_stage >= CORE_INIT_STAGE2) {
-		gesture_module_exit(core_data);
-		inspect_module_exit(core_data);
 		hw_ops->irq_enable(core_data, false);
-
-        if (core_data->cookie)
-            panel_event_notifier_unregister(core_data->cookie);
+		inspect_module_exit(core_data);
+		gesture_module_exit(core_data);
 
 		if (atomic_read(&ts_esd->esd_on))
 			goodix_ts_esd_off(core_data);
 
-		goodix_ts_input_dev_remove(core_data);
-		goodix_ts_pen_dev_remove(core_data);
 		goodix_ts_sysfs_exit(core_data);
 		goodix_ts_procfs_exit(core_data);
-		goodix_ts_power_off(core_data);
+
+		goodix_ts_pen_dev_remove(core_data);
+		goodix_ts_input_dev_remove(core_data);
+
+		if (core_data->cookie)
+			panel_event_notifier_unregister(core_data->cookie);
+
+		goodix_fw_update_uninit(core_data);
 	}
+
+	goodix_tools_exit();
+	goodix_ts_power_off(core_data);
 
 	return 0;
 }
