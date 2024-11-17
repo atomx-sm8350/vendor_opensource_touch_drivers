@@ -105,6 +105,7 @@ u32 goodix_get_file_config_id(u8 *ic_config)
 	return le32_to_cpup((__le32 *)&ic_config[CONFIG_ID_OFFSET]);
 }
 
+#if 0
 void print_ic_info(struct goodix_ts_core *cd, struct goodix_ic_info *ic_info)
 {
 	struct device *dev = cd->bus->dev;
@@ -200,6 +201,9 @@ void goodix_rotate_abcd2cbad(int tx, int rx, s16 *data)
 	memcpy(data, temp_buf, size * sizeof(s16));
 	kfree(temp_buf);
 }
+#endif
+
+#if 0
 
 /* get ic type */
 int goodix_get_ic_type(struct device *dev,
@@ -236,6 +240,7 @@ int goodix_get_ic_type(struct device *dev,
 
 	return 0;
 }
+#endif
 
 char *find_file_prefix(const char *file_name)
 {
@@ -251,6 +256,7 @@ char *find_file_prefix(const char *file_name)
 	return result;
 }
 
+#if 0
 void ts_info(struct device *dev, const char *fmt, ...)
 {
 	va_list args;
@@ -294,7 +300,8 @@ void ts_debug(struct device *dev, const char *fmt, ...)
     va_end(args);
 
 	if (dev)
-		dev_info(dev, "[GTP_DBG] %s\n", str);
+		dev_dbg(dev, "[GTP_DBG] %s\n", str);
 	else
-		pr_info("gtx8_common:     [GTP_DBG] %s\n", str);
+		pr_debug("gtx8_common:     [GTP_DBG] %s\n", str);
 }
+#endif

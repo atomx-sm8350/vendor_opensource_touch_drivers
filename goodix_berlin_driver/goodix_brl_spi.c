@@ -35,6 +35,8 @@
 #define SPI_WRITE_FLAG  0xF0
 #define SPI_READ_FLAG   0xF1
 
+struct device *global_spi_parent_device;
+
 /**
  * goodix_spi_read_bra- read device register through spi bus
  * @dev: pointer to device data
@@ -175,6 +177,7 @@ static int goodix_spi_probe(struct spi_device *spi)
 	}
 
 	spi_set_drvdata(spi, ts_dev);
+	global_spi_parent_device = spi->controller->dev.parent;
 
 	mutex_init(&ts_dev->bus.spi_lock);
 	ts_dev->bus.bus_type = GOODIX_BUS_TYPE_SPI;
@@ -228,7 +231,6 @@ static int goodix_spi_remove(struct spi_device *spi)
 static const struct of_device_id spi_matchs[] = {
 	{ .compatible = "goodix,brl-a", .data = (void *)IC_TYPE_BERLIN_A },
 	{ .compatible = "goodix,brl-b", .data = (void *)IC_TYPE_BERLIN_B },
-	{ .compatible = "goodix,ga687x", .data = (void *)IC_TYPE_SUB_B2 },
 	{ .compatible = "goodix,brl-d", .data = (void *)IC_TYPE_BERLIN_D },
 	{ .compatible = "goodix,nottingham", .data = (void *)IC_TYPE_NOTTINGHAM },
 	{ .compatible = "goodix,marseille", .data = (void *)IC_TYPE_MARSEILLE },

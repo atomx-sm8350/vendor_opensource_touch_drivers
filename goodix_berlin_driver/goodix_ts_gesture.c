@@ -170,7 +170,9 @@ int goodix_ts_report_gesture(struct goodix_ts_core *cd,
 			     struct goodix_ts_event *event)
 {
 	struct device *dev = cd->bus->dev;
+#if GOODIX_ENABLE_GESTURE_FOD
 	int fodx, fody, overlay_area;
+#endif
 
 	switch (event->gesture_type) {
 	case GOODIX_GESTURE_SINGLE_TAP:

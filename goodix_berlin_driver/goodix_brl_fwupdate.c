@@ -222,6 +222,7 @@ static int goodix_parse_firmware(struct goodix_ts_core *cd,
 		fw_offset += fw_summary->subsys[i].size;
 	}
 
+#if 0
 	ts_info(dev, "Firmware package protocol: V%u", fw_summary->protocol_ver);
 	ts_info(dev, "Firmware PID:GT%s", fw_summary->fw_pid);
 	ts_info(dev, "Firmware VID:%*ph", 4, fw_summary->fw_vid);
@@ -240,6 +241,7 @@ static int goodix_parse_firmware(struct goodix_ts_core *cd,
 			 fw_summary->subsys[i].flash_addr);
 		ts_debug(dev, "Subsystem Ptr:%p", fw_summary->subsys[i].data);
 	}
+#endif
 
 err_size:
 	return r;

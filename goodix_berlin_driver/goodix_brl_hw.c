@@ -293,6 +293,7 @@ int brl_gesture(struct goodix_ts_core *cd, int gesture_type)
 
 	cmd.data[0] = tmp_val & 0xFF;
 	cmd.data[1] = (tmp_val >> 8) & 0xFF;
+
 	if (cd->hw_ops->send_cmd(cd, &cmd))
 		ts_err(dev, "failed send gesture cmd");
 
@@ -1157,6 +1158,8 @@ static int brl_esd_check(struct goodix_ts_core *cd)
 #define GOODIX_TOUCH_EVENT			0x80
 #define GOODIX_REQUEST_EVENT		0x40
 #define GOODIX_GESTURE_EVENT		0x20
+#define GOODIX_LARGETOUCH_EVENT		0x10
+
 #define GOODIX_FP_EVENT				0x08
 
 static void goodix_parse_finger(struct goodix_touch_data *touch_data, u8 *buf,
@@ -1360,6 +1363,13 @@ static int brl_event_handler(struct goodix_ts_core *cd,
 		       GOODIX_GESTURE_DATA_LEN);
 	}
 
+	if (cd->palm_status) {
+		if (pre_buf[2] & GOODIX_LARGETOUCH_EVENT)
+			update_palm_sensor_value(1);
+		else
+			update_palm_sensor_value(0);
+	}
+
 	return 0;
 }
 
@@ -1372,6 +1382,87 @@ static int brl_after_event_handler(struct goodix_ts_core *cd)
 	if (cd->tools_ctrl_sync)
 		return 0;
 	return hw_ops->write(cd, misc->touch_data_addr, &sync_clean, 1);
+}
+
+#define GOODIX_CHARGER_CMD	0xAF
+static int brl_charger_on(struct goodix_ts_core *cd, bool on)
+{
+	struct goodix_ts_cmd cmd;
+
+	if (cd->work_status == TP_SLEEP) {
+		ts_info(NULL, "Unsupported send charger cmd in sleep mode, ");
+		return 0;
+	}
+
+	cmd.cmd = GOODIX_CHARGER_CMD;
+	cmd.len = 5;
+	cmd.data[0] = on ? 1 : 0;
+
+	if (cd->hw_ops->send_cmd(cd, &cmd)) {
+		ts_err(NULL, "failed send charger cmd, on = %d", on);
+		return -EINVAL;
+	}
+
+	ts_info(NULL, "charger mode %s", on ? "on" : "off");
+	return 0;
+}
+
+#define GOODIX_PALM_CMD		0x70
+static int brl_palm_on(struct goodix_ts_core *cd, bool on)
+{
+	struct goodix_ts_cmd cmd;
+
+	cmd.cmd = GOODIX_PALM_CMD;
+	cmd.len = 5;
+	cmd.data[0] = on ? 1 : 0;
+
+	if (cd->hw_ops->send_cmd(cd, &cmd)) {
+		ts_err(NULL, "failed send palm cmd, on = %d", on);
+		return -EINVAL;
+	}
+
+	ts_info(NULL, "palm mode %s", on ? "on" : "off");
+	return 0;
+}
+
+#ifdef GOODIX_XIAOMI_TOUCHFEATURE
+#define GOODIX_GAME_CMD		0x17
+#define GOODIX_NORMAL_CMD		0x18
+static int brl_game(struct goodix_ts_core *cd, u8 data0, u8 data1, bool on)
+{
+	struct goodix_ts_cmd cmd;
+
+	cmd.cmd = (on) ? GOODIX_GAME_CMD : GOODIX_NORMAL_CMD;
+	cmd.len = 6;
+	cmd.data[0] = data0;
+	cmd.data[1] = data1;
+
+	if (cd->hw_ops->send_cmd(cd, &cmd)) {
+		ts_err(NULL, "failed send game cmd, data0 = 0x%x, data1 = 0x%x, on = %d", data0, data1, on);
+		return -EINVAL;
+	}
+
+	ts_info(NULL, "game data0:0x%x, data1:0x%x, game mode %s", data0, data1, on ? "on" : "off");
+	return 0;
+}
+#endif
+
+#define GOODIX_HIGH_RATE_CMD		0xC0
+static int brl_switch_report_rate(struct goodix_ts_core *cd, bool on)
+{
+	struct goodix_ts_cmd cmd;
+
+	cmd.cmd = GOODIX_HIGH_RATE_CMD;
+	cmd.len = 5;
+	cmd.data[0] = on ? 1 : 0;
+
+	if (cd->hw_ops->send_cmd(cd, &cmd)) {
+		ts_err(NULL, "failed send report rate cmd, on = %d", on);
+		return -EINVAL;
+	}
+
+	ts_info(NULL, "report rate switch: %s", on ? "480HZ" : "240HZ");
+	return 0;
 }
 
 static struct goodix_ts_hw_ops brl_hw_ops = {
@@ -1392,6 +1483,12 @@ static struct goodix_ts_hw_ops brl_hw_ops = {
 	.esd_check = brl_esd_check,
 	.event_handler = brl_event_handler,
 	.after_event_handler = brl_after_event_handler,
+	.charger_on = brl_charger_on,
+	.palm_on = brl_palm_on,
+#ifdef GOODIX_XIAOMI_TOUCHFEATURE
+	.game = brl_game,
+#endif
+	.switch_report_rate = brl_switch_report_rate,
 };
 
 struct goodix_ts_hw_ops *goodix_get_hw_ops(void)

@@ -41,6 +41,9 @@
 #include <linux/regulator/consumer.h>
 #endif
 #include <linux/soc/qcom/panel_event_notifier.h>
+#include <linux/pm_runtime.h>
+
+#include "../xiaomi/xiaomi_touch.h"
 
 #define GOODIX_CORE_DRIVER_NAME			"goodix_ts"
 #define GOODIX_PEN_DRIVER_NAME			"goodix_ts,pen"
@@ -67,12 +70,24 @@
 #define GOODIX_NORMAL_RESET_DELAY_MS	200
 #define GOODIX_HOLD_CPU_RESET_DELAY_MS	5
 
+#define GOODIX_LOCKDOWN_SIZE			8
+
 #define GOODIX_RETRY_3					3
 #define GOODIX_RETRY_5					5
 #define GOODIX_RETRY_10					10
 
 #define TS_DEFAULT_FIRMWARE				"goodix_firmware.bin"
 #define TS_DEFAULT_CFG_BIN				"goodix_cfg_group.bin"
+
+#define GOODIX_XIAOMI_TOUCHFEATURE 1
+#define GOODIX_QGKI
+
+enum PANEL_ORIENTATION {
+	PANEL_ORIENTATION_DEGREE_0 = 0,
+	PANEL_ORIENTATION_DEGREE_90,
+	PANEL_ORIENTATION_DEGREE_180,
+	PANEL_ORIENTATION_DEGREE_270,
+};
 
 enum GOODIX_GESTURE_TYP {
 	GESTURE_C 			= (1 << 0),
@@ -638,6 +653,10 @@ struct goodix_ts_hw_ops {
 	int (*event_handler)(struct goodix_ts_core *cd,
 			     struct goodix_ts_event *ts_event);
 	int (*after_event_handler)(struct goodix_ts_core *cd);
+	int (*charger_on)(struct goodix_ts_core *cd, bool on);
+	int (*palm_on)(struct goodix_ts_core *cd, bool on);
+	int (*game)(struct goodix_ts_core *cd, u8 data0, u8 data1, bool on);
+	int (*switch_report_rate)(struct goodix_ts_core *cd, bool on);
 };
 
 /*
@@ -666,6 +685,12 @@ enum update_status {
 	UPSTA_UPDATING,
 	UPSTA_SUCCESS,
 	UPSTA_FAILED
+};
+
+enum goodix_tp_state {
+	TP_NORMAL,
+	TP_GESTURE,
+	TP_SLEEP,
 };
 
 struct fw_subsys_info {
@@ -764,7 +789,12 @@ struct goodix_ts_core {
 	struct goodix_ts_event ts_event;
 
 	struct work_struct resume_work;
+	struct work_struct suspend_work;
 	struct work_struct self_check_work;
+
+	/* xiaomi sysfs */
+	struct class *goodix_tp_class;
+	struct device *goodix_touch_dev;
 
 	/* every pointer of this array represent a kind of config */
 	struct goodix_ic_config ic_configs[GOODIX_MAX_CONFIG_GROUP];
@@ -787,14 +817,44 @@ struct goodix_ts_core {
 
 	struct goodix_ts_esd ts_esd;
 
+	struct notifier_block charger_notifier;
+
+	struct workqueue_struct *event_wq;
+	struct workqueue_struct *gesture_wq;
+	struct workqueue_struct *game_wq;
+	struct work_struct charger_work;
+	struct work_struct gesture_work;
+	struct work_struct game_work;
+	struct work_struct power_supply_work;
+
+	u8 lockdown_info[GOODIX_LOCKDOWN_SIZE];
+
+	int work_status;
+	int gesture_enabled;
+	int double_wakeup;
+	int aod_status;
+	int charger_status;
+	int palm_status;
+	int report_rate;
+	bool tp_pm_suspend;
+
+	struct completion pm_resume_completion;
 	void *cookie;
 };
 
 /* log macro */
 extern bool debug_log_flag;
+#if 0
 void ts_info(struct device *dev, const char *fmt, ...);
 void ts_err(struct device *dev, const char *fmt, ...);
 void ts_debug(struct device *dev, const char *fmt, ...);
+#else
+#define ts_info(dev, fmt, arg...) no_printk(fmt, ##arg)
+
+#define ts_err(dev, fmt, arg...) no_printk(fmt, ##arg)
+
+#define ts_debug(dev, fmt, arg...) no_printk(fmt, ##arg)
+#endif
 
 extern int g_pdev_id;
 struct goodix_ts_hw_ops *goodix_get_hw_ops(void);
@@ -809,15 +869,22 @@ u32 goodix_append_checksum(u8 *data, int len, int mode);
 int checksum_cmp(const u8 *data, int size, int mode);
 int is_risk_data(struct goodix_ts_core *cd, const u8 *data, int size);
 u32 goodix_get_file_config_id(u8 *ic_config);
+#if 0
 void goodix_rotate_abcd2cbad(int tx, int rx, s16 *data);
 void print_ic_info(struct goodix_ts_core *cd, struct goodix_ic_info *ic_info);
+#else
+static inline void goodix_rotate_abcd2cbad(int tx, int rx, s16 *data) { }
+static inline void print_ic_info(struct goodix_ts_core *cd, struct goodix_ic_info *ic_info) { }
+#endif
 
 char *find_file_prefix(const char *file_name);
 int goodix_fw_update_init(struct goodix_ts_core *cd);
 void goodix_fw_update_uninit(struct goodix_ts_core *cd);
 int goodix_do_fw_update(struct goodix_ts_core *cd, int mode);
+#if 0
 int goodix_get_ic_type(struct device *dev,
 		       struct goodix_bus_interface *bus_inf);
+#endif
 int gesture_module_init(struct goodix_ts_core *cd);
 void gesture_module_exit(struct goodix_ts_core *cd);
 
@@ -842,12 +909,12 @@ int goodix_ts_replay_init(struct goodix_ts_core *core_data);
 void goodix_ts_replay_exit(struct goodix_ts_core *core_data);
 int goodix_ts_replay_record(struct goodix_ts_core *core_data, struct goodix_ts_event *ts_event);
 #else
-static inline int inspect_module_init(struct goodix_ts_core *cd);
+static inline int inspect_module_init(struct goodix_ts_core *cd)
 {
 	return 0;
 }
 
-static inline void void inspect_module_exit(struct goodix_ts_core *cd) { }
+static inline void inspect_module_exit(struct goodix_ts_core *cd) { }
 
 static inline int goodix_tools_init(struct goodix_ts_core *cd)
 {
