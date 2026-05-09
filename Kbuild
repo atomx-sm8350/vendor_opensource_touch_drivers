@@ -45,6 +45,8 @@ ifeq ($(CONFIG_TOUCHSCREEN_GOODIX_BRL), y)
 		 ./goodix_berlin_driver/goodix_ts_tools.o \
 		 ./goodix_berlin_driver/goodix_ts_gesture.o \
 		 ./goodix_berlin_driver/goodix_ts_inspect.o \
+		 ./goodix_berlin_driver/goodix_ts_replay.o \
+		 ./goodix_berlin_driver/goodix_ts_dump.o \
 		 ./goodix_berlin_driver/goodix_brl_spi.o \
 		 ./goodix_berlin_driver/goodix_brl_i2c.o
 
