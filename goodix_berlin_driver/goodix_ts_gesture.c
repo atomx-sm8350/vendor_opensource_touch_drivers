@@ -101,6 +101,7 @@ static ssize_t single_type_store(struct kobject *kobj,
 	return count;
 }
 
+#if GOODIX_ENABLE_GESTURE_FOD
 static ssize_t fod_type_show(struct kobject *kobj, struct kobj_attribute *attr,
 			     char *buf)
 {
@@ -130,7 +131,9 @@ static ssize_t fod_type_store(struct kobject *kobj, struct kobj_attribute *attr,
 
 	return count;
 }
+#endif
 
+#if GOODIX_ENABLE_GESTURE_SLIDE
 static ssize_t slide_type_show(struct kobject *kobj, struct kobj_attribute *attr,
 			     char *buf)
 {
@@ -161,6 +164,7 @@ static ssize_t slide_type_store(struct kobject *kobj, struct kobj_attribute *att
 
 	return count;
 }
+#endif
 
 int goodix_ts_report_gesture(struct goodix_ts_core *cd,
 			     struct goodix_ts_event *event)
@@ -193,6 +197,7 @@ int goodix_ts_report_gesture(struct goodix_ts_core *cd,
 			ts_debug(dev, "not enable DOUBLE-TAP");
 		}
 		break;
+#if GOODIX_ENABLE_GESTURE_FOD
 	case GOODIX_GESTURE_FOD_DOWN:
 		if (cd->gesture_type & GESTURE_FOD_PRESS) {
 			ts_info(dev, "get FOD-DOWN gesture");
@@ -232,6 +237,8 @@ int goodix_ts_report_gesture(struct goodix_ts_core *cd,
 			ts_debug(dev, "not enable FOD-UP");
 		}
 		break;
+#endif
+#if GOODIX_ENABLE_GESTURE_SLIDE
 	case GOODIX_GESTURE_SLIDE_UP:
 		if (cd->gesture_type & GESTURE_SLIDE_UP) {
 			ts_info(dev, "get SLIDE-UP gesture");
@@ -263,6 +270,7 @@ int goodix_ts_report_gesture(struct goodix_ts_core *cd,
 			ts_debug(dev, "not enable SLIDE-RIGHT");
 		}
 		break;
+#endif
 	default:
 		ts_err(dev, "not support gesture type[%02X]", event->gesture_type);
 		break;
@@ -273,14 +281,22 @@ int goodix_ts_report_gesture(struct goodix_ts_core *cd,
 
 static struct kobj_attribute double_type = __ATTR_RW(double_type);
 static struct kobj_attribute single_type = __ATTR_RW(single_type);
+#if GOODIX_ENABLE_GESTURE_FOD
 static struct kobj_attribute fod_type = __ATTR_RW(fod_type);
+#endif
+#if GOODIX_ENABLE_GESTURE_SLIDE
 static struct kobj_attribute slide_type = __ATTR_RW(slide_type);
+#endif
 
 static struct attribute *gesture_attrs[] = {
 	&double_type.attr,
 	&single_type.attr,
+#if GOODIX_ENABLE_GESTURE_FOD
 	&fod_type.attr,
+#endif
+#if GOODIX_ENABLE_GESTURE_SLIDE
 	&slide_type.attr,
+#endif
 	NULL,
 };
 

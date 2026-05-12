@@ -55,6 +55,10 @@
 
 /* set this value to 0, if you do not want to enable dev dump function */
 #define GOODIX_ENABLE_DUMP_DEV			0
+
+#define GOODIX_ENABLE_GESTURE_FOD		0
+#define GOODIX_ENABLE_GESTURE_SLIDE		0
+
 #define GOODIX_MAX_TOUCH				10
 #define GOODIX_MAX_KEY					10
 #define GOODIX_PEN_MAX_PRESSURE			4096
