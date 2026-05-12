@@ -324,6 +324,8 @@ int gesture_module_init(struct goodix_ts_core *cd)
 		goto err_out;
 	}
 
+	cd->gesture_type = GESTURE_SINGLE_TAP | GESTURE_DOUBLE_TAP;
+
 	ts_info(dev, "gesture module init success");
 	return 0;
 
