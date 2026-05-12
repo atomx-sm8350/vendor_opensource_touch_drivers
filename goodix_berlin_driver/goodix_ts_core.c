@@ -21,11 +21,7 @@
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/uaccess.h>
-
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 38)
 #include <linux/input/mt.h>
-#define INPUT_TYPE_B_PROTOCOL
-#endif
 
 #include "goodix_ts_core.h"
 
@@ -1103,7 +1099,6 @@ static void goodix_ts_report_pen(struct goodix_ts_core *cd,
 	mutex_unlock(&dev->mutex);
 }
 
-#ifdef INPUT_TYPE_B_PROTOCOL
 static void goodix_ts_report_finger(struct goodix_ts_core *cd,
 				    struct goodix_touch_data *touch_data)
 {
@@ -1152,40 +1147,6 @@ static void goodix_ts_report_finger(struct goodix_ts_core *cd,
 
 	mutex_unlock(&dev->mutex);
 }
-#else
-static void goodix_ts_report_a(struct goodix_ts_core *cd,
-		struct goodix_touch_data *touch_data)
-{
-	struct input_dev *dev = cd->input_dev;
-	unsigned int touch_num = touch_data->touch_num;
-	int i;
-	int abs = -1;
-
-	for (i = 0; i < GOODIX_MAX_TOUCH; i++) {
-		if (touch_data->coords[i].status == TS_TOUCH) {
-			input_report_abs(dev, ABS_MT_POSITION_X,
-					 touch_data->coords[i].x);
-			input_report_abs(dev, ABS_MT_POSITION_Y,
-					 touch_data->coords[i].y);
-			input_report_abs(dev, ABS_MT_TOUCH_MAJOR,
-					 touch_data->coords[i].w);
-			input_mt_sync(dev);
-			if (abs == -1)
-				abs = i;
-		}
-	}
-
-	input_report_key(dev, BTN_TOUCH, touch_num > 0 ? 1 : 0);
-	input_report_key(dev, BTN_TOOL_FINGER, touch_num > 0 ? 1 : 0);
-
-	if (abs >= 0) {
-		input_report_abs(dev, ABS_X, touch_data->coords[abs].x);
-		input_report_abs(dev, ABS_Y, touch_data->coords[abs].y);
-	}
-
-	input_sync(dev);
-}
-#endif
 
 static int goodix_ts_request_handle(struct goodix_ts_core *cd,
 				    struct goodix_ts_event *ts_event)
@@ -1234,14 +1195,10 @@ static irqreturn_t goodix_ts_threadirq_func(int irq, void *data)
 	ret = hw_ops->event_handler(core_data, ts_event);
 	if (likely(!ret)) {
         if (!atomic_read(&core_data->suspended)) { // coor mode
-            if (ts_event->event_type & EVENT_TOUCH) {
-                /* report touch */
-#ifdef INPUT_TYPE_B_PROTOCOL
+            /* report touch */
+            if (ts_event->event_type & EVENT_TOUCH)
                 goodix_ts_report_finger(core_data, &ts_event->touch_data);
-#else
-				goodix_ts_report_a(core_data, &ts_event->touch_data);
-#endif
-            }
+
             if (core_data->board_data->pen_enable &&
                 ts_event->event_type & EVENT_PEN) {
                 goodix_ts_report_pen(core_data, &ts_event->pen_data);
@@ -1482,17 +1439,7 @@ static int goodix_ts_input_dev_config(struct goodix_ts_core *core_data)
 			     ts_bdata->panel_max_y - 1, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_TOUCH_MAJOR, 0,
 			     ts_bdata->panel_max_w - 1, 0, 0);
-#ifdef INPUT_TYPE_B_PROTOCOL
-#if LINUX_VERSION_CODE > KERNEL_VERSION(3, 7, 0)
 	input_mt_init_slots(input_dev, GOODIX_MAX_TOUCH, INPUT_MT_DIRECT);
-#else
-	input_mt_init_slots(input_dev, GOODIX_MAX_TOUCH);
-#endif
-#else
-	/* for single touch */
-	input_set_abs_params(input_dev, ABS_X, 0, ts_bdata->panel_max_x - 1, 0, 0);
-	input_set_abs_params(input_dev, ABS_Y, 0, ts_bdata->panel_max_y - 1, 0, 0);
-#endif
 
 	input_set_capability(input_dev, EV_KEY, KEY_POWER);
 	input_set_capability(input_dev, EV_KEY, KEY_WAKEUP);
