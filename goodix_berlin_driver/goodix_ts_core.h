@@ -40,14 +40,7 @@
 #include <linux/of_gpio.h>
 #include <linux/regulator/consumer.h>
 #endif
-#ifdef CONFIG_DRM_MEDIATEK
-#include "mtk_disp_notify.h"
-#elif defined(CONFIG_DRM_PANEL_NOTIFY)
 #include <linux/soc/qcom/panel_event_notifier.h>
-#elif defined(CONFIG_FB)
-#include <linux/notifier.h>
-#include <linux/fb.h>
-#endif
 
 #define GOODIX_CORE_DRIVER_NAME			"goodix_ts"
 #define GOODIX_PEN_DRIVER_NAME			"goodix_ts,pen"
@@ -476,9 +469,7 @@ struct goodix_ts_board_data {
 	bool esd_enable;
 	char fw_name[GOODIX_MAX_STR_LABLE_LEN];
 	char cfg_bin_name[GOODIX_MAX_STR_LABLE_LEN];
-#ifdef CONFIG_DRM_PANEL_NOTIFY
 	struct drm_panel *active_panel;
-#endif
 };
 
 enum goodix_fw_update_mode {
@@ -796,13 +787,7 @@ struct goodix_ts_core {
 
 	struct goodix_ts_esd ts_esd;
 
-#ifdef CONFIG_DRM_MEDIATEK
-	struct notifier_block pm_notifier;
-#elif defined(CONFIG_DRM_PANEL_NOTIFY)
 	void *cookie;
-#elif defined(CONFIG_FB)
-	struct notifier_block pm_notifier;
-#endif
 };
 
 /* log macro */

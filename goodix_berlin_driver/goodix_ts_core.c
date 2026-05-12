@@ -835,8 +835,7 @@ static void goodix_ts_procfs_exit(struct goodix_ts_core *cd)
 }
 
 #if IS_ENABLED(CONFIG_OF)
-
-#ifdef CONFIG_DRM_PANEL_NOTIFY
+#if defined(CONFIG_DRM)
 static int goodix_check_panel_dt(struct device_node *np,
 				      struct goodix_ts_board_data *board_data)
 {
@@ -845,12 +844,12 @@ static int goodix_check_panel_dt(struct device_node *np,
     struct device_node *node;
     struct drm_panel *panel;
 
-    count = of_count_phandle_with_args(np, "panel", NULL);
+    count = of_count_phandle_with_args(np, "qcom,display-panels", NULL);
     if (count <= 0)
         return 0;
 
     for (i = 0; i < count; i++) {
-        node = of_parse_phandle(np, "panel", i);
+        node = of_parse_phandle(np, "qcom,display-panels", i);
         panel = of_drm_find_panel(node);
         of_node_put(node);
         if (!IS_ERR(panel)) {
@@ -859,9 +858,10 @@ static int goodix_check_panel_dt(struct device_node *np,
         }
     }
 
-    return -ENODEV;
+    return PTR_ERR(panel);
 }
 #endif
+
 /**
  * goodix_parse_dt_resolution - parse resolution from dt
  * @node: devicetree node
@@ -1016,10 +1016,14 @@ static int goodix_parse_dt(struct device *dev,
 			sizeof(board_data->cfg_bin_name));
 	}
 
-#ifdef CONFIG_DRM_PANEL_NOTIFY
+#ifdef CONFIG_DRM
     r = goodix_check_panel_dt(node, board_data);
-    if (r)
+    if (r) {
+        if (r == -EPROBE_DEFER)
+            return r;
+
         ts_err(dev, "check panel dt failed");
+    }
 #endif
 
 	/* get xyz resolutions */
@@ -1739,40 +1743,6 @@ static void goodix_ts_resume_work(struct work_struct *work)
 	goodix_ts_resume(cd);
 }
 
-#ifdef CONFIG_DRM_MEDIATEK
-static int goodix_ts_mtk_drm_notifier_callback(struct notifier_block *self,
-				unsigned long event, void *v)
-{
-	struct goodix_ts_core *core_data =
-		container_of(self, struct goodix_ts_core, pm_notifier);
-	struct device *dev = core_data->bus->dev;
-	int *data = (int *)v;
-
-    if (!core_data || !v) {
-        ts_err(dev, "invalid parameters");
-        return -1;
-    }
-
-    if (event == MTK_DISP_EVENT_BLANK) {
-            ts_info(dev, "%s IN, MTK_DISP_EVENT_BLANK", __func__);
-            if (*data == MTK_DISP_BLANK_UNBLANK) {
-				schedule_work(&core_data->resume_work);
-            }
-            ts_info(dev, "%s OUT", __func__);
-    } else if (event == MTK_DISP_EARLY_EVENT_BLANK) {
-            ts_info(dev, "%s IN, MTK_DISP_EARLY_EVENT_BLANK", __func__);
-            if (*data == MTK_DISP_BLANK_POWERDOWN) {
-				cancel_work_sync(&core_data->resume_work);
-				goodix_ts_suspend(core_data);
-            }
-            ts_info(dev, "%s OUT", __func__);
-        } else {
-            ts_info(dev, "%s ignore disp event %d, data %d", __func__, event, *data);
-    }
-
-	return 0;
-}
-#elif defined(CONFIG_DRM_PANEL_NOTIFY)
 static void goodix_ts_drm_notifier_callback(enum panel_event_notifier_tag tag,
                 struct panel_event_notification *notification, void *client_data)
 {
@@ -1805,34 +1775,8 @@ static void goodix_ts_drm_notifier_callback(enum panel_event_notifier_tag tag,
         break;
     }
 }
-#elif defined(CONFIG_FB)
-/**
- * goodix_ts_fb_notifier_callback - Framebuffer notifier callback
- * Called by kernel during framebuffer blanck/unblank phrase
- */
-int goodix_ts_fb_notifier_callback(struct notifier_block *self,
-				   unsigned long event, void *data)
-{
-	struct goodix_ts_core *core_data =
-		container_of(self, struct goodix_ts_core, pm_notifier);
-	struct fb_event *fb_event = data;
-	int *blank;
 
-	blank = fb_event->data;
-	if (fb_event && fb_event->data && core_data) {
-		if (event == FB_EVENT_BLANK) {
-			if (*blank == FB_BLANK_UNBLANK) {
-				schedule_work(&core_data->resume_work);
-			} else if (*blank == FB_BLANK_POWERDOWN) {
-				cancel_work_sync(&core_data->resume_work);
-				goodix_ts_suspend(core_data);
-			}
-		}
-	}
-
-	return 0;
-}
-#elif defined(CONFIG_PM)
+#if defined(CONFIG_PM) && !defined(CONFIG_DRM)
 /**
  * goodix_ts_pm_suspend - PM suspend function
  * Called by kernel during system suspend phrase
@@ -1918,11 +1862,6 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
 	}
 	ts_info(dev, "success register irq");
 
-#ifdef CONFIG_DRM_MEDIATEK
-    cd->pm_notifier.notifier_call = goodix_ts_mtk_drm_notifier_callback;
-    if (mtk_disp_notifier_register(GOODIX_CORE_DRIVER_NAME, &cd->pm_notifier))
-        ts_err(dev, "Failed to register disp notifier");
-#elif defined(CONFIG_DRM_PANEL_NOTIFY)
     if (cd->board_data->active_panel) {
         cd->cookie = panel_event_notifier_register(
                     PANEL_EVENT_NOTIFICATION_PRIMARY,
@@ -1933,11 +1872,7 @@ int goodix_ts_stage2_init(struct goodix_ts_core *cd)
         if (!cd->cookie)
             ts_err(dev, "Failed to register panel event notifier");
     }
-#elif defined(CONFIG_FB)
-    cd->pm_notifier.notifier_call = goodix_ts_fb_notifier_callback;
-    if (fb_register_client(&cd->pm_notifier))
-        ts_err(dev, "Failed to register fb notifier client:%d", ret);
-#endif
+
 	/* create sysfs files */
 	goodix_ts_sysfs_init(cd);
 
@@ -2097,7 +2032,9 @@ static int goodix_ts_probe(struct platform_device *pdev)
 	if (IS_ENABLED(CONFIG_OF) && bus_interface->dev->of_node) {
 		/* parse devicetree property */
 		ret = goodix_parse_dt(bus_interface->dev, board_data);
-		if (ret) {
+		if (ret == -EPROBE_DEFER) {
+			return ret;
+		} else if (ret)
 			ts_err(bus_interface->dev, "failed parse device info form dts, %d", ret);
 			return -EINVAL;
 		}
@@ -2190,14 +2127,10 @@ static int goodix_ts_remove(struct platform_device *pdev)
 		gesture_module_exit(core_data);
 		inspect_module_exit(core_data);
 		hw_ops->irq_enable(core_data, false);
-#ifdef CONFIG_DRM_MEDIATEK
-        mtk_disp_notifier_unregister(&core_data->pm_notifier);
-#elif defined(CONFIG_DRM_PANEL_NOTIFY)
+
         if (core_data->cookie)
             panel_event_notifier_unregister(core_data->cookie);
-#elif defined(CONFIG_FB)
-		fb_unregister_client(&core_data->pm_notifier);
-#endif
+
 		if (atomic_read(&ts_esd->esd_on))
 			goodix_ts_esd_off(core_data);
 
@@ -2242,7 +2175,7 @@ static struct platform_driver goodix_ts_driver = {
 	.driver = {
 		.name = GOODIX_CORE_DRIVER_NAME,
 		.owner = THIS_MODULE,
-#if defined(CONFIG_PM) && !defined(CONFIG_DRM_MEDIATEK) && !defined(CONFIG_DRM_PANEL_NOTIFY) && !defined(CONFIG_FB)
+#if defined(CONFIG_PM) && !defined(CONFIG_DRM)
 		.pm = &dev_pm_ops,
 #endif
 	},
