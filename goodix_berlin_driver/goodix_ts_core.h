@@ -831,15 +831,19 @@ int goodix_get_ic_type(struct device *dev,
 		       struct goodix_bus_interface *bus_inf);
 int gesture_module_init(struct goodix_ts_core *cd);
 void gesture_module_exit(struct goodix_ts_core *cd);
-int inspect_module_init(struct goodix_ts_core *cd);
-void inspect_module_exit(struct goodix_ts_core *cd);
-int goodix_tools_init(struct goodix_ts_core *cd);
-void goodix_tools_exit(struct goodix_ts_core *cd);
+
 void goodix_ts_esd_on(struct goodix_ts_core *cd);
 void goodix_ts_esd_off(struct goodix_ts_core *cd);
 
 int goodix_ts_report_gesture(struct goodix_ts_core *cd,
 			     struct goodix_ts_event *event);
+
+#ifdef CONFIG_TOUCHSCREEN_GOODIX_BRL_DEBUG
+int inspect_module_init(struct goodix_ts_core *cd);
+void inspect_module_exit(struct goodix_ts_core *cd);
+
+int goodix_tools_init(struct goodix_ts_core *cd);
+void goodix_tools_exit(struct goodix_ts_core *cd);
 
 int goodix_dump_dev_init(struct goodix_ts_core *cd);
 void goodix_dump_dev_exit(void);
@@ -848,5 +852,30 @@ void goodix_get_dump_frame(struct goodix_ts_core *cd);
 int goodix_ts_replay_init(struct goodix_ts_core *core_data);
 void goodix_ts_replay_exit(struct goodix_ts_core *core_data);
 int goodix_ts_replay_record(struct goodix_ts_core *core_data, struct goodix_ts_event *ts_event);
+#else
+static inline int inspect_module_init(struct goodix_ts_core *cd);
+{
+	return 0;
+}
+
+static inline void void inspect_module_exit(struct goodix_ts_core *cd) { }
+
+static inline int goodix_tools_init(struct goodix_ts_core *cd)
+{
+	return 0;
+}
+
+static inline void goodix_tools_exit(struct goodix_ts_core *cd) { }
+
+static inline int goodix_ts_replay_init(struct goodix_ts_core *core_data)
+{
+	return 0;
+}
+
+static inline void goodix_ts_replay_exit(struct goodix_ts_core *core_data) { }
+
+static inline void goodix_ts_replay_record(struct goodix_ts_core *core_data,
+										struct goodix_ts_event *ts_event) { }
+#endif
 
 #endif
