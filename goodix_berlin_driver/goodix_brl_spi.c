@@ -169,8 +169,10 @@ static int goodix_spi_probe(struct spi_device *spi)
 
 	/* get ic type */
 	ret = goodix_get_ic_type(&spi->dev, &ts_dev->bus);
-	if (ret < 0)
+	if (ret < 0) {
+		kfree(ts_dev);
 		return ret;
+	}
 
 	spi_set_drvdata(spi, ts_dev);
 
@@ -224,32 +226,23 @@ static int goodix_spi_remove(struct spi_device *spi)
 
 #ifdef CONFIG_OF
 static const struct of_device_id spi_matchs[] = {
-	{
-		.compatible = "goodix,brl-a",
-	},
-	{
-		.compatible = "goodix,brl-b",
-	},
-	{
-		.compatible = "goodix,brl-d",
-	},
-	{
-		.compatible = "goodix,nottingham",
-	},
-	{
-		.compatible = "goodix,marseille",
-	},
-	{
-		.compatible = "goodix,atb",
-	},
-	{},
+	{ .compatible = "goodix,brl-a", .data = (void *)IC_TYPE_BERLIN_A },
+	{ .compatible = "goodix,brl-b", .data = (void *)IC_TYPE_BERLIN_B },
+	{ .compatible = "goodix,ga687x", .data = (void *)IC_TYPE_SUB_B2 },
+	{ .compatible = "goodix,brl-d", .data = (void *)IC_TYPE_BERLIN_D },
+	{ .compatible = "goodix,nottingham", .data = (void *)IC_TYPE_NOTTINGHAM },
+	{ .compatible = "goodix,marseille", .data = (void *)IC_TYPE_MARSEILLE },
+	{ .compatible = "goodix,atb", .data = (void *)IC_TYPE_ATB },
+	{ /* Sentinel */ }
 };
+MODULE_DEVICE_TABLE(of, goodix_spi_of_match);
 #endif
 
 static const struct spi_device_id spi_id_table[] = {
 	{ TS_DRIVER_NAME, 0 },
 	{},
 };
+MODULE_DEVICE_TABLE(spi, spi_id_table);
 
 static struct spi_driver goodix_spi_driver = {
 	.driver = {
